@@ -7,6 +7,13 @@ from rich.console import Console
 from rich.table import Table
 
 from .config import get_vm_config, load_config
+from .oci_api import (
+    get_instance_details,
+    get_network_info,
+    get_public_ip,
+    get_security_rules,
+    instance_action,
+)
 from .ssh import PROJECT_ROOT, get_connection, run_remote, run_script, upload_dir
 
 console = Console()
@@ -351,3 +358,136 @@ def deploy(compose_file, name):
     with get_connection() as conn:
         conn.run(f"cd {remote_dir} && docker compose up -d", pty=True)
     console.print(f"[green]{name} deployed successfully.")
+
+
+# --- Cloud (OCI control plane) commands ---
+
+@cli.group()
+def cloud():
+    """Manage OCI cloud infrastructure (no SSH required)."""
+
+
+@cloud.command(name="info")
+def cloud_info():
+    """Show instance details from OCI API."""
+    with console.status("Querying OCI API..."):
+        try:
+            details = get_instance_details()
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+
+    state = details["lifecycle_state"]
+    state_colors = {"RUNNING": "green", "STOPPED": "red", "STOPPING": "yellow", "STARTING": "yellow"}
+    state_style = state_colors.get(state, "white")
+
+    table = Table(title="OCI Instance")
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("Name", details["display_name"])
+    table.add_row("State", f"[{state_style}]{state}[/{state_style}]")
+    table.add_row("Shape", details["shape"])
+    table.add_row("OCPUs", str(details["ocpus"]))
+    table.add_row("Memory", f"{details['memory_gb']} GB")
+    table.add_row("Bandwidth", f"{details['bandwidth_gbps']} Gbps")
+    table.add_row("AD", details["availability_domain"])
+    table.add_row("Fault Domain", details["fault_domain"])
+    table.add_row("Created", str(details["time_created"]))
+    console.print(table)
+
+
+@cloud.command(name="start")
+def cloud_start():
+    """Start the instance."""
+    with console.status("Starting instance..."):
+        try:
+            new_state = instance_action("START")
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+    console.print(f"[green]Instance state: {new_state}")
+
+
+@cloud.command(name="stop")
+@click.option("--force", is_flag=True, help="Force stop instead of graceful stop")
+def cloud_stop(force):
+    """Stop the instance (graceful by default)."""
+    action = "STOP" if force else "SOFTSTOP"
+    with console.status("Stopping instance..."):
+        try:
+            new_state = instance_action(action)
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+    console.print(f"[yellow]Instance state: {new_state}")
+
+
+@cloud.command(name="reboot")
+@click.option("--force", is_flag=True, help="Hard reset instead of graceful reboot")
+def cloud_reboot(force):
+    """Reboot the instance (graceful by default)."""
+    action = "RESET" if force else "SOFTRESET"
+    with console.status("Rebooting instance..."):
+        try:
+            new_state = instance_action(action)
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+    console.print(f"[yellow]Instance state: {new_state}")
+
+
+@cloud.command(name="ip")
+def cloud_ip():
+    """Show the instance's public IP address."""
+    with console.status("Querying OCI API..."):
+        try:
+            ip = get_public_ip()
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+    if ip:
+        console.print(f"[green]{ip}")
+    else:
+        console.print("[yellow]No public IP found")
+
+
+@cloud.command(name="network")
+def cloud_network():
+    """Show VCN, subnet, and IP information."""
+    with console.status("Querying OCI API..."):
+        try:
+            net = get_network_info()
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+
+    table = Table(title="OCI Network")
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("VCN", net.get("vcn_name", "N/A"))
+    table.add_row("VCN CIDR", net.get("vcn_cidr", "N/A"))
+    table.add_row("Subnet", net.get("subnet_name", "N/A"))
+    table.add_row("Subnet CIDR", net.get("subnet_cidr", "N/A"))
+    table.add_row("Public IP", net.get("public_ip", "N/A"))
+    table.add_row("Private IP", net.get("private_ip", "N/A"))
+    console.print(table)
+
+
+@cloud.command(name="security")
+def cloud_security():
+    """List OCI security list ingress rules."""
+    with console.status("Querying OCI API..."):
+        try:
+            rules = get_security_rules()
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+
+    table = Table(title="Security List Ingress Rules")
+    table.add_column("Source", style="cyan")
+    table.add_column("Protocol", style="yellow")
+    table.add_column("Port", style="green")
+    table.add_column("Description", style="white")
+    for rule in rules:
+        table.add_row(rule["source"], rule["protocol"], rule["port_range"] or "all", rule["description"])
+    console.print(table)

@@ -45,6 +45,16 @@ uv run oci-vm deploy ./path/to/docker-compose.yml --name myservice
 
 # Run remote command
 uv run oci-vm run "uptime"
+
+# OCI cloud management (no SSH required)
+uv run oci-vm cloud info         # Instance details
+uv run oci-vm cloud start        # Start instance
+uv run oci-vm cloud stop         # Graceful stop
+uv run oci-vm cloud stop --force # Hard stop
+uv run oci-vm cloud reboot       # Graceful reboot
+uv run oci-vm cloud ip           # Public IP lookup
+uv run oci-vm cloud network      # VCN/subnet info
+uv run oci-vm cloud security     # OCI firewall rules
 ```
 
 ## Project Structure
@@ -60,6 +70,7 @@ oracle-cli/
 ├── oracle_cli/            # Python CLI package
 │   ├── cli.py            # Click commands
 │   ├── config.py         # Config loader
+│   ├── oci_api.py        # OCI SDK helpers
 │   └── ssh.py            # SSH/Fabric helpers
 └── scripts/               # Remote setup scripts
 ```

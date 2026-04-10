@@ -34,6 +34,7 @@ def run_script(script_name: str) -> None:
     with get_connection() as conn:
         conn.put(str(local_path), remote_path)
         conn.run(f"chmod +x {remote_path}")
+        conn.run(f"sed -i 's/\\r$//' {remote_path}")
         conn.run(f"sudo bash {remote_path}", pty=True)
         conn.run(f"rm {remote_path}")
 
@@ -45,7 +46,7 @@ def upload_dir(local_dir: Path, remote_dir: str) -> None:
         for f in local_dir.rglob("*"):
             if f.is_file():
                 rel = f.relative_to(local_dir)
-                remote_file = f"{remote_dir}/{rel}"
-                remote_parent = str(Path(remote_file).parent)
+                remote_file = f"{remote_dir}/{rel.as_posix()}"
+                remote_parent = remote_file.rsplit("/", 1)[0]
                 conn.run(f"mkdir -p {remote_parent}")
                 conn.put(str(f), remote_file)
