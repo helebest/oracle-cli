@@ -1,6 +1,7 @@
 services:
   hermes:
-    image: hermes-agent:local
+    build: .
+    image: hermes-agent:custom
     container_name: hermes
     restart: unless-stopped
     command: gateway run
