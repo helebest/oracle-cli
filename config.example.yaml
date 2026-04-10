@@ -1,0 +1,16 @@
+vm:
+  name: oracle-arm-instance
+  host: <YOUR_VM_PUBLIC_IP>
+  user: ubuntu
+  ssh_key: credentials/ssh-key.key
+  shape: VM.Standard.A1.Flex
+  ocpu: 4
+  memory_gb: 24
+
+ports:
+  http: 80
+  https: 443
+  wireguard: 51820
+
+docker:
+  compose_dir: /home/ubuntu/docker

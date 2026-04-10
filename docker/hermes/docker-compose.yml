@@ -1,0 +1,13 @@
+services:
+  hermes:
+    image: hermes-agent:local
+    container_name: hermes
+    restart: unless-stopped
+    command: gateway run
+    volumes:
+      - ./data:/opt/data
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "3.0"
