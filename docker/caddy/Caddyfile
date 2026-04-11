@@ -1,9 +1,6 @@
-# Caddy reverse proxy configuration
-# Add your service routes below, e.g.:
-#
-# example.com {
-#     reverse_proxy localhost:8080
-# }
+3x-panel.{$DOMAIN} {
+    reverse_proxy localhost:2053
+}
 
 :80 {
     respond "Oracle ARM Docker Server is running." 200

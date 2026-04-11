@@ -1,6 +1,12 @@
 """CLI entry point for oracle-cli."""
 
+import sys
 from pathlib import Path
+
+# Fix Windows GBK encoding issues with Docker/SSH output
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import click
 from rich.console import Console
@@ -151,12 +157,18 @@ def setup_security():
 def setup_caddy():
     """Deploy Caddy reverse proxy only."""
     cfg = load_config()
+    domain = cfg.get("domain")
+    if not domain:
+        console.print("[red]Error: 'domain' not set in config.yaml")
+        raise SystemExit(1)
     remote_dir = cfg["docker"]["compose_dir"] + "/caddy"
     local_dir = PROJECT_ROOT / "docker" / "caddy"
     upload_dir(local_dir, remote_dir)
     with get_connection() as conn:
+        conn.run(f"echo 'DOMAIN={domain}' > {remote_dir}/.env", pty=True)
         conn.run(f"cd {remote_dir} && docker compose up -d", pty=True)
     console.print("[green]Caddy deployed.")
+    console.print(f"[bold]3x-ui panel: [cyan]https://3x-panel.{domain}[/]")
 
 
 @setup.command(name="xray")
@@ -187,7 +199,10 @@ def setup_xray():
     # 3. Print setup guide
     console.rule("[bold green]Deployment complete!")
     console.print()
+    domain = cfg.get("domain")
     console.print(f"[bold]3x-ui panel: [cyan]http://{host}:2053[/]")
+    if domain:
+        console.print(f"[bold]3x-ui panel (Caddy): [cyan]https://3x-panel.{domain}[/]")
     console.print(f"[bold]Default login: [yellow]admin / admin[/] (change immediately!)")
     console.print()
     console.print("[bold]Next steps:")

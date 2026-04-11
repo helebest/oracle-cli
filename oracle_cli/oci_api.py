@@ -100,6 +100,53 @@ def get_network_info() -> dict[str, Any]:
     return {}
 
 
+def add_ingress_rule(protocol: str, port: int, description: str = "") -> None:
+    """Add an ingress rule to the security list attached to the instance's subnet."""
+    config = _get_oci_config()
+    compute = oci.core.ComputeClient(config)
+    vn_client = oci.core.VirtualNetworkClient(config)
+    instance_id, compartment_id = _get_ids()
+
+    vnic_attachments = compute.list_vnic_attachments(
+        compartment_id, instance_id=instance_id
+    ).data
+
+    for va in vnic_attachments:
+        if va.lifecycle_state != "ATTACHED":
+            continue
+        subnet = vn_client.get_subnet(va.subnet_id).data
+        sl_id = subnet.security_list_ids[0]
+        sl = vn_client.get_security_list(sl_id).data
+
+        proto_num = {"TCP": "6", "UDP": "17"}[protocol.upper()]
+        port_range = oci.core.models.PortRange(min=port, max=port)
+
+        if proto_num == "6":
+            options_kwargs = {"tcp_options": oci.core.models.TcpOptions(destination_port_range=port_range)}
+        else:
+            options_kwargs = {"udp_options": oci.core.models.UdpOptions(destination_port_range=port_range)}
+
+        new_rule = oci.core.models.IngressSecurityRule(
+            source="0.0.0.0/0",
+            source_type="CIDR_BLOCK",
+            protocol=proto_num,
+            description=description,
+            **options_kwargs,
+        )
+
+        existing_rules = list(sl.ingress_security_rules)
+        existing_rules.append(new_rule)
+
+        vn_client.update_security_list(
+            sl_id,
+            oci.core.models.UpdateSecurityListDetails(
+                ingress_security_rules=existing_rules,
+            ),
+        )
+        return
+    raise RuntimeError("No attached VNIC found")
+
+
 def get_security_rules() -> list[dict[str, str]]:
     """Get ingress rules from security lists attached to the instance's subnet."""
     config = _get_oci_config()

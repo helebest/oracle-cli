@@ -1,3 +1,5 @@
+domain: example.com
+
 vm:
   name: oracle-arm-instance
   host: <YOUR_VM_PUBLIC_IP>

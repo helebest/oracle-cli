@@ -31,7 +31,21 @@ Two parallel backends: **CLI → SSH** (OS-level) and **CLI → OCI SDK** (cloud
 - **cli.py** — Click command groups with Rich output. Command groups: `setup` (provisioning), `docker` (containers), `cloud` (OCI control plane). Top-level: `info`, `status`, `run`, `ssh`, `ports`, `deploy`.
 - **config.py** — Loads `config.yaml` (project root, hardcoded path). Config schema matches `config.example.yaml`.
 - **ssh.py** — Fabric/Paramiko wrapper. `get_connection()`, `run_remote()`, `run_script()`, `upload_dir()`.
-- **oci_api.py** — OCI Python SDK wrapper. `get_instance_details()`, `instance_action()`, `get_public_ip()`, `get_network_info()`, `get_security_rules()`. Uses `~/.oci/config` for auth and `config.yaml` for instance/compartment IDs.
+- **oci_api.py** — OCI Python SDK wrapper. `get_instance_details()`, `instance_action()`, `get_public_ip()`, `get_network_info()`, `get_security_rules()`, `add_ingress_rule()`. Uses `~/.oci/config` for auth and `config.yaml` for instance/compartment IDs.
+
+## Docker Services & Networking
+
+All three services run with `network_mode: host` (sharing the host network stack). This is required because Oracle Cloud's iptables rules block Docker bridge network outbound traffic.
+
+- **Caddy** (reverse proxy) — Listens on ports 80/443. Auto-HTTPS via Let's Encrypt. Caddyfile uses `{$DOMAIN}` env var injected via `.env` file on the remote.
+- **3x-ui** (Xray proxy panel) — Web panel on port 2053, VLESS+Reality on port 8443.
+- **Hermes** (AI agent) — NousResearch/hermes-agent. Runs `gateway run` for messaging platforms. Has optional HTTP API on port 8642 (disabled by default, enable via `API_SERVER_ENABLED=true`).
+
+Caddy reverse proxy routes:
+- `3x-panel.{domain}` → `localhost:2053` (3x-ui panel, auto HTTPS)
+- `:80` → default response
+
+Config requirement: `domain` field in `config.yaml` (e.g. `domain: i-am-holo.top`). DNS A record must point the subdomain to the VM IP with Cloudflare proxy disabled (DNS only).
 
 ## Key Conventions
 
