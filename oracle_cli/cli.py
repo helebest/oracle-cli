@@ -219,10 +219,10 @@ def setup_xray():
 
 
 @setup.command(name="hermes")
-@click.option("--start", is_flag=True, help="Skip setup, just start the gateway (after setup is done)")
-@click.option("--status", is_flag=True, help="Check build status")
+@click.option("--start", is_flag=True, help="Start/restart the gateway without rebuilding")
+@click.option("--status", is_flag=True, help="Check container status")
 def setup_hermes(start, status):
-    """Deploy Hermes Agent (builds from source on ARM64)."""
+    """Deploy Hermes Agent (uses official multi-arch image from Docker Hub)."""
     cfg = load_config()
     vm_cfg = get_vm_config()
     remote_dir = cfg["docker"]["compose_dir"] + "/hermes"
@@ -232,25 +232,18 @@ def setup_hermes(start, status):
     user = vm_cfg["user"]
 
     if status:
-        # Check build status
         with get_connection() as conn:
-            building = conn.run("pgrep -f 'docker build.*hermes' > /dev/null 2>&1 && echo 'building' || echo 'done'", hide=True).stdout.strip()
-            if building == "building":
-                log = conn.run("tail -5 /tmp/hermes-build.log 2>/dev/null || echo 'no log'", hide=True).stdout.strip()
-                console.print("[yellow]Build in progress...")
-                console.print(log)
+            result = conn.run(
+                "docker ps -a --filter name=hermes --format '{{.Status}}'",
+                hide=True,
+            ).stdout.strip()
+            if result:
+                console.print(f"[green]hermes: {result}")
             else:
-                exists = conn.run("docker images hermes-agent:local -q", hide=True).stdout.strip()
-                if exists:
-                    console.print("[green]Build complete! Image ready.")
-                else:
-                    log = conn.run("tail -10 /tmp/hermes-build.log 2>/dev/null || echo 'no log'", hide=True).stdout.strip()
-                    console.print("[red]Build not running and image not found. Last log:")
-                    console.print(log)
+                console.print("[yellow]hermes container not found.")
         return
 
     if start:
-        # Upload compose config and start gateway
         console.rule("[bold blue]Hermes Agent")
         upload_dir(local_dir, remote_dir)
         with get_connection() as conn:
@@ -259,46 +252,35 @@ def setup_hermes(start, status):
         console.print("[green]Hermes Agent gateway started.")
         return
 
-    # Default: clone repo (if needed) and start background build
-    console.rule("[bold blue]Hermes Agent - ARM64 build")
-    with get_connection() as conn:
-        # Check if image already exists
-        exists = conn.run("docker images hermes-agent:local -q", hide=True).stdout.strip()
-        if exists:
-            console.print("[green]Image already built!")
-        else:
-            # Check if already building
-            building = conn.run("pgrep -f 'docker build.*hermes' > /dev/null 2>&1 && echo 'yes' || echo 'no'", hide=True).stdout.strip()
-            if building == "yes":
-                console.print("[yellow]Build already in progress.")
-            else:
-                # Clone if needed
-                has_repo = conn.run("test -d /tmp/hermes-agent && echo yes || echo no", hide=True).stdout.strip()
-                if has_repo != "yes":
-                    console.print("Cloning repo...")
-                    conn.run("git clone --depth 1 https://github.com/nousresearch/hermes-agent.git /tmp/hermes-agent", pty=True)
-                # Start background build
-                conn.run("nohup docker build -t hermes-agent:local /tmp/hermes-agent > /tmp/hermes-build.log 2>&1 &")
-                console.print("[yellow]Build started in background on VM.")
-
-        conn.run(f"mkdir -p {remote_dir}/data")
-
+    # Default: pull official image, build custom layer, deploy
+    console.rule("[bold blue]Hermes Agent")
     upload_dir(local_dir, remote_dir)
-
-    console.rule("[bold green]Next steps")
-    console.print()
-    console.print("1. Check build progress:")
-    console.print("   [cyan]uv run oci-vm setup hermes --status[/]")
-    console.print()
-    console.print("2. After build completes, run interactive setup:")
-    console.print(f"   [cyan]ssh -i {key_path} {user}@{host}[/]")
-    console.print()
-    console.print(f"   [cyan]docker run -it --rm \\")
-    console.print(f"     -v {remote_dir}/data:/opt/data \\")
-    console.print(f"     hermes-agent:local setup[/]")
-    console.print()
-    console.print("3. Start the gateway:")
-    console.print("   [cyan]uv run oci-vm setup hermes --start[/]")
+    with get_connection() as conn:
+        conn.run(f"mkdir -p {remote_dir}/data")
+        # Write empty .env if not exists (hermes reads its own config from /opt/data)
+        conn.run(f"test -f {remote_dir}/.env || touch {remote_dir}/.env", hide=True)
+        console.print("Pulling image & building...")
+        conn.run(f"cd {remote_dir} && docker compose build --pull", pty=True)
+        # Check if interactive setup has been done (data dir is root-owned)
+        has_config = conn.run(
+            f"sudo test -f {remote_dir}/data/config.yaml && echo yes || echo no",
+            hide=True,
+        ).stdout.strip()
+        if has_config != "yes":
+            console.rule("[bold yellow]First-time setup required")
+            console.print()
+            console.print("Run interactive setup via SSH:")
+            console.print(f"  [cyan]ssh -i {key_path} {user}@{host}[/]")
+            console.print()
+            console.print(f"  [cyan]docker run -it --rm \\")
+            console.print(f"    -v {remote_dir}/data:/opt/data \\")
+            console.print(f"    hermes-agent:custom setup[/]")
+            console.print()
+            console.print("Then start the gateway:")
+            console.print("  [cyan]uv run oci-vm setup hermes --start[/]")
+        else:
+            conn.run(f"cd {remote_dir} && docker compose up -d", pty=True)
+            console.print("[green]Hermes Agent deployed.")
 
 
 # --- Docker management commands ---

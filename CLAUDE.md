@@ -39,7 +39,7 @@ All three services run with `network_mode: host` (sharing the host network stack
 
 - **Caddy** (reverse proxy) — Listens on ports 80/443. Auto-HTTPS via Let's Encrypt. Caddyfile uses `{$DOMAIN}` env var injected via `.env` file on the remote.
 - **3x-ui** (Xray proxy panel) — Web panel on port 2053, VLESS+Reality on port 8443.
-- **Hermes** (AI agent) — NousResearch/hermes-agent. Runs `gateway run` for messaging platforms. Has optional HTTP API on port 8642 (disabled by default, enable via `API_SERVER_ENABLED=true`).
+- **Hermes** (AI agent) — `nousresearch/hermes-agent` from Docker Hub (multi-arch: amd64 + arm64). Custom Dockerfile adds `gh` and `vim`. Runs `gateway run` for messaging platforms. Has optional HTTP API on port 8642 (disabled by default, enable via `API_SERVER_ENABLED=true`).
 
 Caddy reverse proxy routes:
 - `3x-panel.{domain}` → `localhost:2053` (3x-ui panel, auto HTTPS)

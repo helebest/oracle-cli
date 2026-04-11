@@ -4,7 +4,9 @@ services:
     image: hermes-agent:custom
     container_name: hermes
     restart: unless-stopped
+    network_mode: host
     command: gateway run
+    env_file: .env
     volumes:
       - ./data:/opt/data
     deploy:
