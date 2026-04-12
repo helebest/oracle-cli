@@ -1,0 +1,16 @@
+services:
+  keepalive:
+    image: alpine:3.21
+    container_name: keepalive
+    restart: unless-stopped
+    network_mode: host
+    tmpfs:
+      - /ballast:size=5g
+    entrypoint: ["/bin/sh", "/keepalive.sh"]
+    volumes:
+      - ./keepalive.sh:/keepalive.sh:ro
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: "0.1"

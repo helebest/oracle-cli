@@ -20,6 +20,9 @@ uv run oci-vm cloud stop       # Graceful stop
 uv run oci-vm cloud ip         # Public IP lookup
 uv run oci-vm cloud network    # VCN/subnet info
 uv run oci-vm cloud security   # OCI firewall rules
+uv run oci-vm setup keepalive           # Deploy anti-reclaim keepalive service
+uv run oci-vm setup keepalive --status  # Keepalive status + memory usage
+uv run oci-vm setup keepalive --remove  # Remove keepalive service
 ```
 
 There are no tests, linter, or CI pipeline configured.
@@ -40,6 +43,7 @@ All three services run with `network_mode: host` (sharing the host network stack
 - **Caddy** (reverse proxy) — Listens on ports 80/443. Auto-HTTPS via Let's Encrypt. Caddyfile uses `{$DOMAIN}` env var injected via `.env` file on the remote.
 - **3x-ui** (Xray proxy panel) — Web panel on port 2053, VLESS+Reality on port 8443.
 - **Hermes** (AI agent) — `nousresearch/hermes-agent` from Docker Hub (multi-arch: amd64 + arm64). Custom Dockerfile adds `gh` and `vim`. Runs `gateway run` for messaging platforms. Has optional HTTP API on port 8642 (disabled by default, enable via `API_SERVER_ENABLED=true`).
+- **Keepalive** (anti-reclaim) — Alpine container with 5GB tmpfs memory ballast to prevent Oracle Free Tier VM reclamation. Runs periodic health checks (local Caddy + external connectivity) every 5 minutes. Resource limits: 6GB memory, 0.1 CPU.
 
 Caddy reverse proxy routes:
 - `3x-panel.{domain}` → `localhost:2053` (3x-ui panel, auto HTTPS)
