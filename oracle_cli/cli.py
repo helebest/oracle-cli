@@ -283,6 +283,36 @@ def setup_hermes(start, status):
             console.print("[green]Hermes Agent deployed.")
 
 
+@setup.command(name="keepalive")
+def setup_keepalive():
+    """Deploy keepalive container (anti-reclaim + health monitoring)."""
+    cfg = load_config()
+    remote_dir = cfg["docker"]["compose_dir"] + "/keepalive"
+    local_dir = PROJECT_ROOT / "docker" / "keepalive"
+
+    console.rule("[bold blue]Keepalive deployment")
+
+    # Stop and remove old keepalive container if exists
+    with get_connection() as conn:
+        conn.run("docker rm -f keepalive 2>/dev/null || true", hide=True)
+
+    upload_dir(local_dir, remote_dir)
+    with get_connection() as conn:
+        console.print("Building keepalive image...")
+        conn.run(f"cd {remote_dir} && docker compose build", pty=True)
+        conn.run(f"cd {remote_dir} && docker compose up -d", pty=True)
+
+    console.rule("[bold green]Keepalive deployed!")
+    console.print()
+    console.print("[bold]Features:")
+    console.print("  - CPU burst: UTC+8 03:00-04:00 (anti-reclaim)")
+    console.print("  - Health check: every 5 min (3x-ui, hermes, caddy)")
+    console.print("  - Zombie cleanup: every 30 min")
+    console.print("  - Disk monitor: every hour (auto prune > 80%)")
+    console.print()
+    console.print("View logs: [cyan]uv run oci-vm docker logs keepalive[/]")
+
+
 # --- Docker management commands ---
 
 @cli.group(name="docker")

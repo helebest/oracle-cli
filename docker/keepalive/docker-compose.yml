@@ -1,0 +1,14 @@
+services:
+  keepalive:
+    build: .
+    image: keepalive:local
+    container_name: keepalive
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
