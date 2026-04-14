@@ -15,5 +15,5 @@ RUN apt-get update && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
 # P2: dev tools & Python utilities
-RUN pip install --no-cache-dir --break-system-packages \
+RUN uv pip install --system --no-cache \
         yt-dlp ruff mypy pygount nano-pdf jupyterlab
