@@ -5,24 +5,24 @@ LOG_PREFIX="[keepalive]"
 HEALTH_INTERVAL=300    # 5 minutes
 ZOMBIE_INTERVAL=1800   # 30 minutes
 DISK_INTERVAL=3600     # 1 hour
+CPU_INTERVAL=1200      # 20 minutes
+CPU_DURATION=180       # 3 minutes burst
 LOOP_INTERVAL=60       # main loop tick: 1 minute
 
 last_health=0
 last_zombie=0
 last_disk=0
+last_cpu=0
 
 log() {
     echo "$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %Z') $LOG_PREFIX $*"
 }
 
-# --- Task 1: CPU keepalive (UTC+8 03:00-04:00 only) ---
+# --- Task 1: CPU keepalive (every 20 min, 3 min burst) ---
 cpu_keepalive() {
-    cur_hour=$(TZ=Asia/Shanghai date +%H)
-    if [ "$cur_hour" = "03" ]; then
-        log "CPU burst: starting 30s workload"
-        timeout 30 sh -c 'while true; do head -c 1M /dev/urandom | sha256sum > /dev/null; done' 2>/dev/null || true
-        log "CPU burst: done"
-    fi
+    log "CPU burst: starting ${CPU_DURATION}s workload"
+    timeout "$CPU_DURATION" sh -c 'while true; do head -c 1M /dev/urandom | sha256sum > /dev/null; done' 2>/dev/null || true
+    log "CPU burst: done"
 }
 
 # --- Task 3: Container health check ---
@@ -82,7 +82,7 @@ log "Starting keepalive service"
 log "Health check interval: ${HEALTH_INTERVAL}s"
 log "Zombie cleanup interval: ${ZOMBIE_INTERVAL}s"
 log "Disk monitor interval: ${DISK_INTERVAL}s"
-log "CPU burst window: UTC+8 03:00-04:00"
+log "CPU burst: ${CPU_DURATION}s every ${CPU_INTERVAL}s"
 
 # Run health check immediately on start
 health_check
@@ -91,8 +91,12 @@ last_health=$(date +%s)
 while true; do
     now=$(date +%s)
 
-    # CPU keepalive (every loop tick, but only fires during 03:00 hour)
-    cpu_keepalive
+    # CPU keepalive (every 20 min)
+    elapsed=$((now - last_cpu))
+    if [ "$elapsed" -ge "$CPU_INTERVAL" ]; then
+        cpu_keepalive
+        last_cpu=$now
+    fi
 
     # Health check (every 5 min)
     elapsed=$((now - last_health))
