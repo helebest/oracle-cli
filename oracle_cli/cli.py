@@ -284,48 +284,33 @@ def setup_hermes(start, status):
 
 
 @setup.command(name="keepalive")
-@click.option("--status", is_flag=True, help="Check keepalive container status and memory usage")
-@click.option("--remove", is_flag=True, help="Stop and remove keepalive service")
-def setup_keepalive(status, remove):
-    """Deploy keepalive service to prevent Oracle Free Tier VM reclamation."""
+def setup_keepalive():
+    """Deploy keepalive container (anti-reclaim + health monitoring)."""
     cfg = load_config()
     remote_dir = cfg["docker"]["compose_dir"] + "/keepalive"
     local_dir = PROJECT_ROOT / "docker" / "keepalive"
 
-    if status:
-        with get_connection() as conn:
-            container = conn.run(
-                "docker ps -a --filter name=keepalive --format '{{.Status}}'",
-                hide=True,
-            ).stdout.strip()
-            if not container:
-                console.print("[yellow]keepalive container not found.")
-                return
-            console.print(f"[green]keepalive: {container}")
-            stats = conn.run(
-                "docker stats --no-stream --format 'MEM: {{.MemUsage}}  CPU: {{.CPUPerc}}' keepalive",
-                hide=True,
-            ).stdout.strip()
-            console.print(f"[cyan]{stats}")
-            logs = conn.run(
-                "docker logs --tail 5 keepalive 2>&1",
-                hide=True,
-            ).stdout.strip()
-            console.print(f"\n[dim]{logs}")
-        return
+    console.rule("[bold blue]Keepalive deployment")
 
-    if remove:
-        console.rule("[bold red]Remove Keepalive")
-        with get_connection() as conn:
-            conn.run(f"cd {remote_dir} && docker compose down", pty=True)
-        console.print("[green]Keepalive service removed.")
-        return
+    # Stop and remove old keepalive container if exists
+    with get_connection() as conn:
+        conn.run("docker rm -f keepalive 2>/dev/null || true", hide=True)
 
-    console.rule("[bold blue]Keepalive (anti-reclaim)")
     upload_dir(local_dir, remote_dir)
     with get_connection() as conn:
+        console.print("Building keepalive image...")
+        conn.run(f"cd {remote_dir} && docker compose build", pty=True)
         conn.run(f"cd {remote_dir} && docker compose up -d", pty=True)
-    console.print("[green]Keepalive deployed. 5GB memory ballast will be allocated on startup.")
+
+    console.rule("[bold green]Keepalive deployed!")
+    console.print()
+    console.print("[bold]Features:")
+    console.print("  - CPU burst: UTC+8 03:00-04:00 (anti-reclaim)")
+    console.print("  - Health check: every 5 min (3x-ui, hermes, caddy)")
+    console.print("  - Zombie cleanup: every 30 min")
+    console.print("  - Disk monitor: every hour (auto prune > 80%)")
+    console.print()
+    console.print("View logs: [cyan]uv run oci-vm docker logs keepalive[/]")
 
 
 # --- Docker management commands ---
