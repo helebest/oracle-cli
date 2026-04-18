@@ -20,6 +20,13 @@ uv run oci-vm cloud stop       # Graceful stop
 uv run oci-vm cloud ip         # Public IP lookup
 uv run oci-vm cloud network    # VCN/subnet info
 uv run oci-vm cloud security   # OCI firewall rules
+uv run oci-vm setup keepalive           # Deploy anti-reclaim keepalive service
+uv run oci-vm setup keepalive --status  # Keepalive status + memory usage
+uv run oci-vm setup keepalive --remove  # Remove keepalive service
+uv run oci-vm setup obsidian-sync             # Deploy R2<->vault bisync for Hermes
+uv run oci-vm setup obsidian-sync --status    # Sync container status + recent log
+uv run oci-vm setup obsidian-sync --sync-now  # Trigger immediate bisync
+uv run oci-vm setup obsidian-sync --reset     # Re-establish bisync baseline (dangerous)
 ```
 
 There are no tests, linter, or CI pipeline configured.
@@ -40,6 +47,8 @@ All three services run with `network_mode: host` (sharing the host network stack
 - **Caddy** (reverse proxy) — Listens on ports 80/443. Auto-HTTPS via Let's Encrypt. Caddyfile uses `{$DOMAIN}` env var injected via `.env` file on the remote.
 - **3x-ui** (Xray proxy panel) — Web panel on port 2053, VLESS+Reality on port 8443.
 - **Hermes** (AI agent) — `nousresearch/hermes-agent` from Docker Hub (multi-arch: amd64 + arm64). Custom Dockerfile adds `gh` and `vim`. Runs `gateway run` for messaging platforms. Has optional HTTP API on port 8642 (disabled by default, enable via `API_SERVER_ENABLED=true`).
+- **Keepalive** (anti-reclaim) — Alpine container with 5GB tmpfs memory ballast to prevent Oracle Free Tier VM reclamation. Runs periodic health checks (local Caddy + external connectivity) every 5 minutes. Resource limits: 6GB memory, 0.1 CPU.
+- **obsidian-sync** — `rclone/rclone` container doing `bisync` between Cloudflare R2 (Remotely Save's rclone-crypt encrypted bucket) and a shared Docker volume `obsidian-sync_obsidian-vault`. Hermes mounts the decrypted volume read-write at `/opt/data/vault/secondbrain`, enabling its built-in Obsidian skill to read/search/create notes that round-trip to all your devices via Remotely Save. Bisync interval 10 min; conflict strategy = keep mtime-newer, loser saved as `.conflict1.md`; safety cap `--max-delete 5`. sync.sh runs `chown -R $VAULT_UID:$VAULT_GID /vault` (default `10000:10000`, matching the `hermes` user in `nousresearch/hermes-agent`; override via `docker/obsidian-sync/.env`) after each sync so the non-root Hermes agent can write. Secrets live in `docker/obsidian-sync/rclone.conf` (gitignored).
 
 Caddy reverse proxy routes:
 - `3x-panel.{domain}` → `localhost:2053` (3x-ui panel, auto HTTPS)

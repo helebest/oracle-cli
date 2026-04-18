@@ -1,0 +1,34 @@
+# Copy to rclone.conf and fill in real values. The real rclone.conf is gitignored.
+# After editing, re-deploy with: uv run oci-vm setup obsidian-sync
+#
+# Generate obscured passwords locally with:
+#   rclone obscure <cleartext-password>
+# (Obscuring is not real encryption — just protects against casual eyeballing.)
+
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = <R2_ACCESS_KEY_ID>
+secret_access_key = <R2_SECRET_ACCESS_KEY>
+endpoint = https://<CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com
+acl = private
+
+# The crypt layer. `remote` points at the bucket root (or a subprefix) where
+# Remotely Save stores encrypted blobs. Do NOT include a prefix the plugin did
+# not create — the blobs typically sit directly at bucket root.
+#
+# Remotely Save's "rclone-compatible" encryption produces base64url-encoded
+# filenames, so you MUST set `filename_encoding = base64` (rclone's default is
+# base32, which will fail with "illegal base32 data").
+#
+# password / password2 must be rclone-obscured:
+#   docker run --rm rclone/rclone:latest obscure <cleartext>
+# If Remotely Save's settings show no salt, leave password2 commented out.
+[r2-crypt]
+type = crypt
+remote = r2:<R2_BUCKET_NAME>
+filename_encryption = standard
+directory_name_encryption = true
+filename_encoding = base64
+password = <OBSCURED_PASSWORD>
+# password2 = <OBSCURED_SALT>   # only if Remotely Save uses a non-empty salt

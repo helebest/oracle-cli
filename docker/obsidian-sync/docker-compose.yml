@@ -1,0 +1,24 @@
+services:
+  obsidian-sync:
+    image: rclone/rclone:latest
+    container_name: obsidian-sync
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - VAULT_UID=${VAULT_UID:-10000}
+      - VAULT_GID=${VAULT_GID:-10000}
+    volumes:
+      - ./rclone.conf:/config/rclone/rclone.conf:ro
+      - ./sync.sh:/sync.sh:ro
+      - obsidian-vault:/vault
+      - obsidian-bisync-state:/bisync-state
+    entrypoint: ["/bin/sh", "/sync.sh"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+volumes:
+  obsidian-vault:
+  obsidian-bisync-state:

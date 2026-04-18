@@ -9,9 +9,15 @@ services:
     env_file: .env
     volumes:
       - ./data:/opt/data
+      - obsidian-vault:/opt/data/vault/secondbrain
       - /var/run/docker.sock:/var/run/docker.sock
     deploy:
       resources:
         limits:
           memory: 8G
           cpus: "3.0"
+
+volumes:
+  obsidian-vault:
+    external: true
+    name: obsidian-sync_obsidian-vault
