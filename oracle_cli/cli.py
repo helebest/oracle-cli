@@ -15,6 +15,7 @@ from rich.table import Table
 from .config import get_vm_config, load_config
 from .oci_api import (
     get_instance_details,
+    get_metrics,
     get_network_info,
     get_public_ip,
     get_security_rules,
@@ -565,6 +566,74 @@ def cloud_network():
     table.add_row("Subnet CIDR", net.get("subnet_cidr", "N/A"))
     table.add_row("Public IP", net.get("public_ip", "N/A"))
     table.add_row("Private IP", net.get("private_ip", "N/A"))
+    console.print(table)
+
+
+SPARK_BLOCKS = "▁▂▃▄▅▆▇█"
+
+
+def _sparkline(values: list[float]) -> str:
+    if not values:
+        return ""
+    lo, hi = min(values), max(values)
+    span = hi - lo or 1.0
+    return "".join(
+        SPARK_BLOCKS[int((v - lo) / span * (len(SPARK_BLOCKS) - 1))]
+        for v in values
+    )
+
+
+@cloud.command(name="metrics")
+@click.option("--hours", type=int, default=24, show_default=True, help="Window size in hours")
+def cloud_metrics(hours):
+    """Show VM load metrics from OCI Monitoring (CPU, Mem, Load, Net, Disk)."""
+    with console.status(f"Querying OCI Monitoring for past {hours}h..."):
+        try:
+            series = get_metrics(hours)
+        except Exception as e:
+            console.print(f"[red]OCI API error: {e}")
+            raise SystemExit(1)
+
+    if not series:
+        console.print("[yellow]No metric data returned")
+        return
+
+    window_start = series[0].get("window_start")
+    window_end = series[0].get("window_end")
+    interval = series[0].get("interval", "?")
+    console.rule(f"[bold blue]VM metrics: past {hours}h ({interval} buckets)")
+    if window_start and window_end:
+        console.print(f"[dim]{window_start.isoformat()} → {window_end.isoformat()}[/]\n")
+
+    table = Table(show_lines=False)
+    table.add_column("Metric")
+    table.add_column("Min", justify="right")
+    table.add_column("Avg", justify="right")
+    table.add_column("Max", justify="right")
+    table.add_column("Total", justify="right")
+    table.add_column("Pts", justify="right")
+    table.add_column("Trend", overflow="fold")
+
+    for s in series:
+        label, fmt = s["label"], s["fmt"]
+        if "error" in s:
+            table.add_row(label, f"[red]{s['error']}[/]", "", "", "", "0", "")
+            continue
+        if s["avg"] is None:
+            table.add_row(label, "-", "-", "-", "-", "0", "")
+            continue
+
+        total_str = f"{s['total_gb']:6.2f} GB" if s["total_gb"] is not None else "-"
+        table.add_row(
+            label,
+            fmt.format(s["min"]),
+            fmt.format(s["avg"]),
+            fmt.format(s["max"]),
+            total_str,
+            str(s["points"]),
+            _sparkline(s["values"]),
+        )
+
     console.print(table)
 
 

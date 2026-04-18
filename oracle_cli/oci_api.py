@@ -1,5 +1,6 @@
 """OCI API helpers using the Oracle Cloud Infrastructure Python SDK."""
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import oci
@@ -7,6 +8,22 @@ import oci
 from .config import load_config
 
 PROTO_MAP = {"6": "TCP", "17": "UDP", "1": "ICMP", "all": "ALL"}
+
+METRICS_NAMESPACE = "oci_computeagent"
+
+# (metric_id, display_label, row_format). Byte counters use .rate() (bytes/sec)
+# because raw OCI values are cumulative; others use .mean() on the bucket.
+METRICS_SPEC = [
+    ("CpuUtilization", "CPU %", "{:6.1f}"),
+    ("MemoryUtilization", "Mem %", "{:6.1f}"),
+    ("LoadAverage", "Load", "{:6.2f}"),
+    ("NetworksBytesIn", "NetIn MB/min", "{:6.1f}"),
+    ("NetworksBytesOut", "NetOut MB/min", "{:6.1f}"),
+    ("DiskBytesRead", "DiskR MB/min", "{:6.1f}"),
+    ("DiskBytesWritten", "DiskW MB/min", "{:6.1f}"),
+]
+
+_BYTES_METRICS = {"NetworksBytesIn", "NetworksBytesOut", "DiskBytesRead", "DiskBytesWritten"}
 
 
 def _get_oci_config() -> dict:
@@ -145,6 +162,73 @@ def add_ingress_rule(protocol: str, port: int, description: str = "") -> None:
         )
         return
     raise RuntimeError("No attached VNIC found")
+
+
+def get_metrics(hours: int = 24) -> list[dict[str, Any]]:
+    """Query VM load metrics from OCI Monitoring for the past ``hours``.
+
+    Returns one dict per metric in METRICS_SPEC with keys: name, label, fmt,
+    is_bytes, min, avg, max, total_gb (bytes only), values (list of floats in
+    display units), points (count).
+    """
+    config = _get_oci_config()
+    client = oci.monitoring.MonitoringClient(config)
+    instance_id, compartment_id = _get_ids()
+
+    # Hour-level buckets for long windows, 5-minute for short, to keep the
+    # series between ~12 and ~168 points.
+    interval_minutes = 60 if hours >= 24 else 5
+    interval = f"{interval_minutes}m"
+
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(hours=hours)
+
+    results = []
+    for metric, label, fmt in METRICS_SPEC:
+        is_bytes = metric in _BYTES_METRICS
+        aggregator = "rate()" if is_bytes else "mean()"
+        query = f'{metric}[{interval}]{{resourceId = "{instance_id}"}}.{aggregator}'
+        details = oci.monitoring.models.SummarizeMetricsDataDetails(
+            namespace=METRICS_NAMESPACE,
+            query=query,
+            start_time=start,
+            end_time=end,
+        )
+        try:
+            resp = client.summarize_metrics_data(compartment_id, details).data
+        except oci.exceptions.ServiceError as e:
+            results.append({
+                "name": metric, "label": label, "fmt": fmt, "is_bytes": is_bytes,
+                "error": f"{e.status} {e.code}",
+                "values": [], "points": 0,
+                "min": None, "avg": None, "max": None, "total_gb": None,
+            })
+            continue
+
+        raw = [p.value for p in resp[0].aggregated_datapoints] if resp else []
+        clean = [v for v in raw if v is not None]
+
+        total_gb = None
+        if is_bytes:
+            # .rate() returns bytes/sec; convert to MB/min and integrate to GB.
+            total_gb = sum(clean) * interval_minutes * 60 / 1024 / 1024 / 1024
+            values = [v * 60 / 1024 / 1024 for v in clean]
+        else:
+            values = clean
+
+        summary = {
+            "name": metric, "label": label, "fmt": fmt, "is_bytes": is_bytes,
+            "values": values, "points": len(values),
+            "min": min(values) if values else None,
+            "avg": sum(values) / len(values) if values else None,
+            "max": max(values) if values else None,
+            "total_gb": total_gb,
+            "window_start": start,
+            "window_end": end,
+            "interval": interval,
+        }
+        results.append(summary)
+    return results
 
 
 def get_security_rules() -> list[dict[str, str]]:

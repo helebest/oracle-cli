@@ -20,6 +20,8 @@ uv run oci-vm cloud stop       # Graceful stop
 uv run oci-vm cloud ip         # Public IP lookup
 uv run oci-vm cloud network    # VCN/subnet info
 uv run oci-vm cloud security   # OCI firewall rules
+uv run oci-vm cloud metrics                # Past 24h CPU/Mem/Load/Net/Disk from OCI Monitoring
+uv run oci-vm cloud metrics --hours 168    # Custom window (hours)
 uv run oci-vm setup keepalive           # Deploy anti-reclaim keepalive service
 uv run oci-vm setup keepalive --status  # Keepalive status + memory usage
 uv run oci-vm setup keepalive --remove  # Remove keepalive service
@@ -38,7 +40,7 @@ Two parallel backends: **CLI → SSH** (OS-level) and **CLI → OCI SDK** (cloud
 - **cli.py** — Click command groups with Rich output. Command groups: `setup` (provisioning), `docker` (containers), `cloud` (OCI control plane). Top-level: `info`, `status`, `run`, `ssh`, `ports`, `deploy`.
 - **config.py** — Loads `config.yaml` (project root, hardcoded path). Config schema matches `config.example.yaml`.
 - **ssh.py** — Fabric/Paramiko wrapper. `get_connection()`, `run_remote()`, `run_script()`, `upload_dir()`.
-- **oci_api.py** — OCI Python SDK wrapper. `get_instance_details()`, `instance_action()`, `get_public_ip()`, `get_network_info()`, `get_security_rules()`, `add_ingress_rule()`. Uses `~/.oci/config` for auth and `config.yaml` for instance/compartment IDs.
+- **oci_api.py** — OCI Python SDK wrapper. `get_instance_details()`, `instance_action()`, `get_public_ip()`, `get_network_info()`, `get_security_rules()`, `add_ingress_rule()`, `get_metrics(hours)` (queries Monitoring namespace `oci_computeagent`; bytes metrics use MQL `.rate()` because raw values are cumulative counters). Uses `~/.oci/config` for auth and `config.yaml` for instance/compartment IDs.
 
 ## Docker Services & Networking
 
