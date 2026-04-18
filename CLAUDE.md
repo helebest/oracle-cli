@@ -2,7 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Documentation sync
+
+Whenever a change affects user-visible behavior — new/renamed CLI commands or options, new services or mount paths, setup steps, or config keys — update **both** `CLAUDE.md` (this file) and `README.md` in the same commit. Keep the command list in `README.md` and the command table here in sync. Silent drift between the two is the main failure mode.
 
 oracle-cli is a CLI tool for managing Oracle Cloud ARM VM instances (VM.Standard.A1.Flex). It provisions infrastructure, deploys Docker services (3x-ui proxy, Caddy, Hermes AI agent), and manages containers over SSH.
 

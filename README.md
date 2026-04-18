@@ -1,6 +1,6 @@
 # oracle-cli
 
-CLI tool for managing Oracle Cloud ARM VM instance (VM.Standard.A1.Flex).
+CLI tool for managing an Oracle Cloud ARM VM instance (VM.Standard.A1.Flex). Provisions infrastructure over SSH and drives the OCI control plane via the Python SDK.
 
 ## Setup
 
@@ -8,69 +8,99 @@ CLI tool for managing Oracle Cloud ARM VM instance (VM.Standard.A1.Flex).
 # Install dependencies
 uv sync
 
-# Copy config template and fill in your VM details
+# Copy config template and fill in VM / OCI IDs
 cp config.example.yaml config.yaml
 
-# Place your SSH key in credentials/
+# Place the SSH key in credentials/
 mkdir -p credentials
 cp /path/to/your/ssh-key.key credentials/
 chmod 600 credentials/*.key
+
+# OCI SDK auth (one-time)
+oci setup config    # writes ~/.oci/config
 ```
 
 ## Usage
 
 ```bash
-# Show VM info
-uv run oci-vm info
+# VM info / status
+uv run oci-vm info                         # Config summary
+uv run oci-vm status                       # Uptime, load, memory, disk, docker
+uv run oci-vm ssh                          # Print SSH command for manual login
+uv run oci-vm ports                        # Open ports
+uv run oci-vm run "uptime"                 # One-shot remote command
 
-# Check VM status
-uv run oci-vm status
+# Infrastructure setup (run once, or per-service)
+uv run oci-vm setup all                    # Base → Docker → firewall → security
+uv run oci-vm setup base                   # Base OS env
+uv run oci-vm setup docker                 # Docker CE
+uv run oci-vm setup firewall               # iptables / ufw
+uv run oci-vm setup security               # Hardening
+uv run oci-vm setup caddy                  # Caddy reverse proxy (auto-HTTPS)
+uv run oci-vm setup xray                   # 3x-ui Xray proxy panel
+uv run oci-vm setup hermes                 # Hermes AI agent (nousresearch/hermes-agent)
+uv run oci-vm setup keepalive              # Anti-reclaim keepalive + health monitor
+uv run oci-vm setup keepalive --status     #   status + memory usage
+uv run oci-vm setup keepalive --remove     #   remove
+uv run oci-vm setup obsidian-sync          # R2 ↔ Hermes vault bisync
+uv run oci-vm setup obsidian-sync --status #   container status + recent bisync log
+uv run oci-vm setup obsidian-sync --sync-now # trigger immediate bisync
+uv run oci-vm setup obsidian-sync --reset  #   re-establish bisync baseline (dangerous)
 
-# One-click infrastructure setup
-uv run oci-vm setup all
-
-# Deploy 3x-ui (Xray proxy)
-uv run oci-vm setup xray
-
-# Deploy Hermes Agent
-uv run oci-vm setup hermes
-
-# Manage Docker containers
-uv run oci-vm docker ps
+# Docker management (over SSH)
+uv run oci-vm docker ps                    # List containers
 uv run oci-vm docker logs <name>
 uv run oci-vm docker stats
-
-# Deploy custom docker-compose
 uv run oci-vm deploy ./path/to/docker-compose.yml --name myservice
 
-# Run remote command
-uv run oci-vm run "uptime"
-
-# OCI cloud management (no SSH required)
-uv run oci-vm cloud info         # Instance details
-uv run oci-vm cloud start        # Start instance
-uv run oci-vm cloud stop         # Graceful stop
-uv run oci-vm cloud stop --force # Hard stop
-uv run oci-vm cloud reboot       # Graceful reboot
-uv run oci-vm cloud ip           # Public IP lookup
-uv run oci-vm cloud network      # VCN/subnet info
-uv run oci-vm cloud security     # OCI firewall rules
+# OCI cloud control plane (no SSH required)
+uv run oci-vm cloud info                   # Instance details
+uv run oci-vm cloud start                  # Start instance
+uv run oci-vm cloud stop                   # Graceful stop
+uv run oci-vm cloud stop --force           # Hard stop
+uv run oci-vm cloud reboot                 # Graceful reboot
+uv run oci-vm cloud ip                     # Public IP
+uv run oci-vm cloud network                # VCN / subnet info
+uv run oci-vm cloud security               # Ingress security rules
+uv run oci-vm cloud metrics                # Past 24h CPU / Mem / Load / Net / Disk
+uv run oci-vm cloud metrics --hours 168    # Custom window (hours)
 ```
+
+## Services on the VM
+
+| Service | Role | Compose |
+|---|---|---|
+| Caddy | Reverse proxy + auto-HTTPS on :80 / :443 | `docker/caddy/` |
+| 3x-ui | Xray proxy panel (:2053 web, :8443 VLESS+Reality) | `docker/3x-ui/` |
+| Hermes | `nousresearch/hermes-agent` — `gateway run`; Obsidian vault at `/opt/data/vault/secondbrain` | `docker/hermes/` |
+| Keepalive | 5 GB tmpfs ballast + periodic health check (anti-reclaim on Oracle Free Tier) | `docker/keepalive/` |
+| obsidian-sync | `rclone` bisync between Cloudflare R2 (rclone-crypt) and the shared `obsidian-sync_obsidian-vault` docker volume | `docker/obsidian-sync/` |
+
+All containers run with `network_mode: host` — Oracle Cloud's iptables rules block Docker bridge outbound traffic.
 
 ## Project Structure
 
 ```
 oracle-cli/
-├── config.example.yaml    # Config template (copy to config.yaml)
-├── credentials/           # SSH keys (git ignored)
-├── docker/                # Docker compose configs
-│   ├── 3x-ui/            # Xray proxy panel
-│   ├── caddy/            # Reverse proxy
-│   └── hermes/           # Hermes Agent
-├── oracle_cli/            # Python CLI package
-│   ├── cli.py            # Click commands
-│   ├── config.py         # Config loader
-│   ├── oci_api.py        # OCI SDK helpers
-│   └── ssh.py            # SSH/Fabric helpers
-└── scripts/               # Remote setup scripts
+├── config.example.yaml   # Config template (copy to config.yaml, gitignored)
+├── credentials/          # SSH keys (gitignored)
+├── docker/               # Docker compose configs
+│   ├── 3x-ui/
+│   ├── caddy/
+│   ├── hermes/
+│   ├── keepalive/
+│   └── obsidian-sync/
+├── oracle_cli/           # Python CLI package
+│   ├── cli.py            # Click commands (info / status / setup / docker / cloud / …)
+│   ├── config.py         # config.yaml loader
+│   ├── oci_api.py        # OCI SDK helpers (instance, network, security, metrics)
+│   └── ssh.py            # SSH / Fabric helpers
+└── scripts/              # Remote setup shell scripts
 ```
+
+## Auth & Config
+
+- `config.yaml` (gitignored) holds VM SSH details and OCI instance / compartment OCIDs.
+- `~/.oci/config` (written by `oci setup config`) holds OCI SDK credentials.
+- `docker/obsidian-sync/rclone.conf` (gitignored) holds R2 credentials and crypt passwords; copy from `rclone.conf.example`.
+- `docker/obsidian-sync/.env` (gitignored, optional) can override `VAULT_UID` / `VAULT_GID` — defaults `10000:10000` match the non-root `hermes` user in the upstream Hermes image.
