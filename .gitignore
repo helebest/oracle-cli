@@ -24,3 +24,7 @@ docker/obsidian-sync/rclone.conf
 
 # Logs
 *.log
+
+# Claude Code per-user state (keep shared .claude/settings.json if we ever add one)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
