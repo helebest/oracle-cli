@@ -313,6 +313,74 @@ def setup_keepalive():
     console.print("View logs: [cyan]uv run oci-vm docker logs keepalive[/]")
 
 
+@setup.command(name="obsidian-sync")
+@click.option("--sync-now", is_flag=True, help="Trigger an immediate bisync")
+@click.option("--status", is_flag=True, help="Show container status + recent bisync log")
+@click.option("--reset", is_flag=True, help="Re-establish bisync baseline (dangerous)")
+def setup_obsidian_sync(sync_now, status, reset):
+    """Deploy obsidian-sync: bidirectional R2 <-> Hermes vault."""
+    cfg = load_config()
+    remote_dir = cfg["docker"]["compose_dir"] + "/obsidian-sync"
+    local_dir = PROJECT_ROOT / "docker" / "obsidian-sync"
+
+    if status:
+        with get_connection() as conn:
+            conn.run(
+                "docker ps -a --filter name=obsidian-sync --format 'STATUS: {{.Status}}'",
+                pty=True,
+            )
+            conn.run("docker logs --tail 30 obsidian-sync 2>&1 || true", pty=True)
+            conn.run(
+                "docker exec obsidian-sync du -sh /vault 2>/dev/null || echo 'vault not ready'",
+                pty=True,
+            )
+            conn.run(
+                "docker exec obsidian-sync stat -c 'vault owner: %U:%G (%u:%g)' /vault "
+                "2>/dev/null || true",
+                pty=True,
+            )
+        return
+
+    if sync_now:
+        with get_connection() as conn:
+            conn.run(
+                "docker exec obsidian-sync rclone bisync r2-crypt: /vault "
+                "--workdir /bisync-state --conflict-resolve newer --max-delete 5 "
+                "--log-level INFO",
+                pty=True,
+            )
+        return
+
+    if reset:
+        console.print("[red]Reset clears bisync state. Next run will do --resync.")
+        if not click.confirm("Continue?"):
+            return
+        with get_connection() as conn:
+            conn.run(
+                "docker exec obsidian-sync rm -f /bisync-state/.initialized",
+                pty=True,
+            )
+            conn.run("docker restart obsidian-sync", pty=True)
+        return
+
+    local_rclone = local_dir / "rclone.conf"
+    if not local_rclone.exists():
+        console.print(
+            "[red]Missing docker/obsidian-sync/rclone.conf. "
+            "Copy rclone.conf.example, fill in R2 creds + crypt passwords, then re-run."
+        )
+        return
+
+    console.rule("[bold blue]Obsidian Sync deployment")
+    upload_dir(local_dir, remote_dir)
+    with get_connection() as conn:
+        conn.run(f"cd {remote_dir} && docker compose up -d", pty=True)
+
+    console.rule("[bold green]Deployed!")
+    console.print("First run does --resync to establish the bisync baseline.")
+    console.print("Monitor: [cyan]uv run oci-vm setup obsidian-sync --status[/]")
+
+
 # --- Docker management commands ---
 
 @cli.group(name="docker")
