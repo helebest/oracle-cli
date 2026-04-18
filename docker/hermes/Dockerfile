@@ -1,4 +1,4 @@
-FROM nousresearch/hermes-agent:latest
+FROM nousresearch/hermes-agent:v2026.4.16
 
 # P1: essential system tools + Docker CLI
 RUN apt-get update && \
@@ -14,6 +14,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
-# P2: dev tools & Python utilities
-RUN uv pip install --system --no-cache \
+# P2: dev tools & Python utilities.
+# --break-system-packages bypasses the PEP 668 EXTERNALLY-MANAGED marker that
+# Debian-based images ship in Python 3.13+ (introduced by upstream on v2026.4.16).
+RUN uv pip install --system --break-system-packages --no-cache \
         yt-dlp ruff mypy pygount nano-pdf jupyterlab
