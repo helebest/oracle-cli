@@ -73,7 +73,7 @@ uv run oci-vm cloud metrics --hours 168    # Custom window (hours)
 | Caddy | Reverse proxy + auto-HTTPS on :80 / :443 | `docker/caddy/` |
 | 3x-ui | Xray proxy panel (:2053 web, :8443 VLESS+Reality) | `docker/3x-ui/` |
 | Hermes | `nousresearch/hermes-agent` — `gateway run`; Obsidian vault at `/opt/data/vault/secondbrain` | `docker/hermes/` |
-| Keepalive | 5 GB tmpfs ballast + periodic health check (anti-reclaim on Oracle Free Tier) | `docker/keepalive/` |
+| Keepalive | 180s CPU burst every 20 min + health checks + zombie / disk cleanup (anti-reclaim on Oracle Free Tier) | `docker/keepalive/` |
 | obsidian-sync | `rclone` bisync between Cloudflare R2 (rclone-crypt) and the shared `obsidian-sync_obsidian-vault` docker volume | `docker/obsidian-sync/` |
 
 All containers run with `network_mode: host` — Oracle Cloud's iptables rules block Docker bridge outbound traffic.
