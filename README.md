@@ -46,6 +46,10 @@ uv run oci-vm setup obsidian-sync          # R2 ↔ Hermes vault bisync
 uv run oci-vm setup obsidian-sync --status #   container status + recent bisync log
 uv run oci-vm setup obsidian-sync --sync-now # trigger immediate bisync
 uv run oci-vm setup obsidian-sync --reset  #   re-establish bisync baseline (dangerous)
+uv run oci-vm setup tailscale              # Install Tailscale + join tailnet (native)
+uv run oci-vm setup tailscale --status     #   tailscale status + netcheck
+uv run oci-vm setup tailscale --down       #   disconnect from tailnet (keep installed)
+uv run oci-vm setup tailscale --remove     #   full uninstall
 
 # Docker management (over SSH)
 uv run oci-vm docker ps                    # List containers
@@ -75,6 +79,7 @@ uv run oci-vm cloud metrics --hours 168    # Custom window (hours)
 | Hermes | `nousresearch/hermes-agent` — `gateway run`; Obsidian vault at `/opt/data/vault/secondbrain` | `docker/hermes/` |
 | Keepalive | 180s CPU burst every 20 min + health checks + zombie / disk cleanup (anti-reclaim on Oracle Free Tier) | `docker/keepalive/` |
 | obsidian-sync | `rclone` bisync between Cloudflare R2 (rclone-crypt) and the shared `obsidian-sync_obsidian-vault` docker volume | `docker/obsidian-sync/` |
+| Tailscale | Mesh VPN joining an existing tailnet — native install (not Docker). Subnet router / exit node capability pre-wired, off by default. | `scripts/setup-tailscale.sh` |
 
 All containers run with `network_mode: host` — Oracle Cloud's iptables rules block Docker bridge outbound traffic.
 
@@ -83,7 +88,7 @@ All containers run with `network_mode: host` — Oracle Cloud's iptables rules b
 ```
 oracle-cli/
 ├── config.example.yaml   # Config template (copy to config.yaml, gitignored)
-├── credentials/          # SSH keys (gitignored)
+├── credentials/          # SSH keys + tailscale auth key (gitignored)
 ├── docker/               # Docker compose configs
 │   ├── 3x-ui/
 │   ├── caddy/
@@ -104,3 +109,4 @@ oracle-cli/
 - `~/.oci/config` (written by `oci setup config`) holds OCI SDK credentials.
 - `docker/obsidian-sync/rclone.conf` (gitignored) holds R2 credentials and crypt passwords; copy from `rclone.conf.example`.
 - `docker/obsidian-sync/.env` (gitignored, optional) can override `VAULT_UID` / `VAULT_GID` — defaults `10000:10000` match the non-root `hermes` user in the upstream Hermes image.
+- Tailscale auth defaults to **interactive**: `setup tailscale` prints a login URL — open it in any browser to approve the VM. `config.yaml` → `tailscale:` section tunes hostname / `advertise_routes` / `advertise_exit_node`. For fully non-interactive provisioning, generate a reusable auth key at [admin panel → Settings → Keys](https://login.tailscale.com/admin/settings/keys), save it to `credentials/tailscale.authkey` (gitignored), and set `auth_key_file` in config. After enabling `advertise_routes` or `advertise_exit_node`, approve the machine at [admin panel → Machines](https://login.tailscale.com/admin/machines).

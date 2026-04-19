@@ -314,6 +314,76 @@ def setup_keepalive():
     console.print("View logs: [cyan]uv run oci-vm docker logs keepalive[/]")
 
 
+@setup.command(name="tailscale")
+@click.option("--status", is_flag=True, help="Show tailscale status + netcheck")
+@click.option("--down", is_flag=True, help="Disconnect from tailnet (keep installed)")
+@click.option("--remove", is_flag=True, help="Full uninstall")
+def setup_tailscale(status, down, remove):
+    """Install Tailscale and join the tailnet (native, not Docker)."""
+    cfg = load_config()
+    ts = cfg.get("tailscale") or {}
+
+    if status:
+        with get_connection() as conn:
+            conn.run("tailscale status || true", pty=True)
+            conn.run("tailscale netcheck 2>&1 | tail -20 || true", pty=True)
+        return
+
+    if down:
+        with get_connection() as conn:
+            conn.run("sudo tailscale down", pty=True)
+        return
+
+    if remove:
+        with get_connection() as conn:
+            conn.run("sudo tailscale down 2>/dev/null || true", pty=True)
+            conn.run("sudo apt-get remove --purge -y tailscale", pty=True)
+            conn.run("sudo rm -f /etc/sysctl.d/99-tailscale.conf", pty=True)
+            conn.run("sudo sysctl --system >/dev/null", pty=True)
+        console.print("[green]Tailscale removed.")
+        return
+
+    routes = ",".join(ts.get("advertise_routes") or [])
+    exit_node = "true" if ts.get("advertise_exit_node") else "false"
+    hostname = ts.get("hostname") or cfg["vm"]["name"]
+
+    # Auth key is optional. If set and present locally, upload it;
+    # otherwise `tailscale up` will print a login URL for browser approval.
+    authkey_rel = ts.get("auth_key_file")
+    has_authkey = bool(authkey_rel and (PROJECT_ROOT / authkey_rel).exists())
+
+    console.rule("[bold blue]Tailscale deployment")
+    with get_connection() as conn:
+        env_parts = [
+            f"TS_HOSTNAME={hostname}",
+            f"TS_ROUTES={routes}",
+            f"TS_EXIT_NODE={exit_node}",
+        ]
+        if has_authkey:
+            conn.put(str(PROJECT_ROOT / authkey_rel), "/tmp/ts-authkey")
+            conn.run("chmod 600 /tmp/ts-authkey")
+            env_parts.append("TS_AUTHKEY_FILE=/tmp/ts-authkey")
+        else:
+            console.print(
+                "[yellow]No auth key configured — watch the output for a "
+                "[bold]login URL[/], open it in any browser to approve the device."
+            )
+
+        conn.put(
+            str(PROJECT_ROOT / "scripts" / "setup-tailscale.sh"),
+            "/tmp/setup-tailscale.sh",
+        )
+        conn.run("chmod +x /tmp/setup-tailscale.sh && sed -i 's/\\r$//' /tmp/setup-tailscale.sh")
+        env = " ".join(env_parts)
+        conn.run(f"sudo {env} bash /tmp/setup-tailscale.sh", pty=True)
+
+    console.rule("[bold green]Tailscale deployed!")
+    if routes or exit_node == "true":
+        console.print()
+        console.print("[yellow]advertise_routes / exit_node enabled — approve in admin panel:")
+        console.print("  https://login.tailscale.com/admin/machines")
+
+
 @setup.command(name="obsidian-sync")
 @click.option("--sync-now", is_flag=True, help="Trigger an immediate bisync")
 @click.option("--status", is_flag=True, help="Show container status + recent bisync log")

@@ -20,3 +20,12 @@ docker:
 oci:
   instance_id: ocid1.instance.oc1.<region>.<unique_id>
   compartment_id: ocid1.tenancy.oc1..<unique_id>
+
+tailscale:
+  hostname: oracle-arm
+  # Optional. If unset or file missing, `tailscale up` prints a login URL for
+  # browser approval (fine for interactive one-shot setup). Set this only if
+  # you want fully non-interactive provisioning.
+  # auth_key_file: credentials/tailscale.authkey   # gitignored
+  advertise_routes: []                            # e.g. ["10.0.0.0/24"]; needs approval in admin panel
+  advertise_exit_node: false                      # enabling needs approval in admin panel
