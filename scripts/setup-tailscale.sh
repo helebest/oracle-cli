@@ -48,7 +48,7 @@ fi
 
 # [4/5] tailscale up (or hot-update via `set` if already running)
 echo "[4/5] Bringing tailscale up..."
-ARGS="--hostname=${TS_HOSTNAME} --accept-routes=true --ssh=false"
+ARGS="--hostname=${TS_HOSTNAME} --accept-routes=true --ssh=true"
 if [ -n "${TS_ROUTES:-}" ]; then
     ARGS="$ARGS --advertise-routes=${TS_ROUTES}"
 fi
