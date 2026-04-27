@@ -285,11 +285,35 @@ def setup_hermes(start, status):
 
 
 @setup.command(name="keepalive")
-def setup_keepalive():
+@click.option("--status", is_flag=True, help="Show keepalive container status + memory + recent logs")
+@click.option("--remove", is_flag=True, help="Stop and remove keepalive container + image")
+def setup_keepalive(status, remove):
     """Deploy keepalive container (anti-reclaim + health monitoring)."""
     cfg = load_config()
     remote_dir = cfg["docker"]["compose_dir"] + "/keepalive"
     local_dir = PROJECT_ROOT / "docker" / "keepalive"
+
+    if status:
+        with get_connection() as conn:
+            conn.run(
+                "docker ps -a --filter name=keepalive --format 'STATUS: {{.Status}}'",
+                pty=True,
+            )
+            conn.run(
+                "docker stats --no-stream "
+                "--format 'table {{.Name}}\\t{{.CPUPerc}}\\t{{.MemUsage}}' "
+                "keepalive 2>/dev/null || true",
+                pty=True,
+            )
+            conn.run("docker logs --tail 30 keepalive 2>&1 || true", pty=True)
+        return
+
+    if remove:
+        with get_connection() as conn:
+            conn.run("docker rm -f keepalive 2>/dev/null || true", pty=True)
+            conn.run("docker rmi keepalive:local 2>/dev/null || true", pty=True)
+        console.print("[green]Keepalive removed.")
+        return
 
     console.rule("[bold blue]Keepalive deployment")
 
