@@ -1,4 +1,12 @@
-FROM nousresearch/hermes-agent:v2026.4.16
+FROM nousresearch/hermes-agent:v2026.4.30
+
+# Upstream toggles the trailing USER directive between releases:
+#   v2026.4.16 → ends as root
+#   v2026.4.23 → ends as hermes (rootless)
+#   v2026.4.30 → ends as root, entrypoint uses tini + gosu to drop to hermes
+# Pin to root for our build layers (apt + uv pip) and DO NOT switch back at the
+# end — v2026.4.30's entrypoint expects to start as root for usermod/gosu.
+USER root
 
 # P1: essential system tools + Docker CLI
 RUN apt-get update && \
