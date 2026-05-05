@@ -1,0 +1,40 @@
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:2026.5.4
+    container_name: openclaw
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    env_file: .env
+    environment:
+      OPENCLAW_DISABLE_BONJOUR: "1"
+      TZ: UTC
+    # --allow-unconfigured lets gateway boot without a pre-existing
+    # openclaw.json; on first run it auto-generates an auth token and writes
+    # it into data/config/. Without this flag the gateway exits with
+    # "Missing config. Run `openclaw setup`..." and Docker enters a restart loop.
+    # All channel / LLM config is then done interactively via the web UI
+    # (loopback-only, reach via SSH tunnel) — no `openclaw setup` wizard needed.
+    command:
+      - node
+      - dist/index.js
+      - gateway
+      - --bind
+      - loopback
+      - --port
+      - "18789"
+      - --allow-unconfigured
+    volumes:
+      - ./data/config:/home/node/.openclaw
+      - ./data/workspace:/home/node/.openclaw/workspace
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"

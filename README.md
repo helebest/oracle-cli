@@ -50,6 +50,9 @@ uv run oci-vm setup tailscale              # Install Tailscale + join tailnet (n
 uv run oci-vm setup tailscale --status     #   tailscale status + netcheck
 uv run oci-vm setup tailscale --down       #   disconnect from tailnet (keep installed)
 uv run oci-vm setup tailscale --remove     #   full uninstall
+uv run oci-vm setup openclaw               # OpenClaw agent (loopback-only web UI)
+uv run oci-vm setup openclaw --status      #   container + listening-port status
+uv run oci-vm setup openclaw --remove      #   stop container (data dir preserved)
 
 # Docker management (over SSH)
 uv run oci-vm docker ps                    # List containers
@@ -80,6 +83,7 @@ uv run oci-vm cloud metrics --hours 168    # Custom window (hours)
 | Keepalive | 180s CPU burst every 20 min + health checks + zombie / disk cleanup (anti-reclaim on Oracle Free Tier) | `docker/keepalive/` |
 | obsidian-sync | `rclone` bisync between Cloudflare R2 (rclone-crypt) and the shared `obsidian-sync_obsidian-vault` docker volume | `docker/obsidian-sync/` |
 | Tailscale | Mesh VPN joining an existing tailnet — native install (not Docker). Subnet router / exit node capability pre-wired, off by default. | `scripts/setup-tailscale.sh` |
+| OpenClaw | `ghcr.io/openclaw/openclaw:2026.5.4` agent gateway. Web UI loopback-only (127.0.0.1:18789); reach via `ssh -L 18789:127.0.0.1:18789 ubuntu@oracle-vm`. Telegram + Feishu channels via outbound (no inbound port). Persistent state at `data/{config,workspace}/`. | `docker/openclaw/` |
 
 All containers run with `network_mode: host` — Oracle Cloud's iptables rules block Docker bridge outbound traffic.
 
@@ -94,7 +98,8 @@ oracle-cli/
 │   ├── caddy/
 │   ├── hermes/
 │   ├── keepalive/
-│   └── obsidian-sync/
+│   ├── obsidian-sync/
+│   └── openclaw/
 ├── oracle_cli/           # Python CLI package
 │   ├── cli.py            # Click commands (info / status / setup / docker / cloud / …)
 │   ├── config.py         # config.yaml loader
@@ -110,3 +115,4 @@ oracle-cli/
 - `docker/obsidian-sync/rclone.conf` (gitignored) holds R2 credentials and crypt passwords; copy from `rclone.conf.example`.
 - `docker/obsidian-sync/.env` (gitignored, optional) can override `VAULT_UID` / `VAULT_GID` — defaults `10000:10000` match the non-root `hermes` user in the upstream Hermes image.
 - Tailscale auth defaults to **interactive**: `setup tailscale` prints a login URL — open it in any browser to approve the VM. `config.yaml` → `tailscale:` section tunes hostname / `advertise_routes` / `advertise_exit_node`. For fully non-interactive provisioning, generate a reusable auth key at [admin panel → Settings → Keys](https://login.tailscale.com/admin/settings/keys), save it to `credentials/tailscale.authkey` (gitignored), and set `auth_key_file` in config. After enabling `advertise_routes` or `advertise_exit_node`, approve the machine at [admin panel → Machines](https://login.tailscale.com/admin/machines).
+- `docker/openclaw/.env` (gitignored) holds OpenClaw secrets: `OPENCLAW_GATEWAY_TOKEN`, `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_VERIFICATION_TOKEN` / `FEISHU_ENCRYPT_KEY`. Copy from `.env.example`. The web UI is loopback-only — reach it from a tailnet peer via `ssh -L 18789:127.0.0.1:18789 ubuntu@oracle-vm`. After deploy, complete one-time channel pairing: `docker exec -it openclaw openclaw pairing approve telegram <CODE>` (Telegram) and `docker exec -it openclaw openclaw channels login --channel feishu` (Feishu QR).

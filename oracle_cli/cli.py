@@ -476,6 +476,85 @@ def setup_obsidian_sync(sync_now, status, reset):
     console.print("Monitor: [cyan]uv run oci-vm setup obsidian-sync --status[/]")
 
 
+@setup.command(name="openclaw")
+@click.option("--status", is_flag=True, help="Show container status + listening port")
+@click.option("--remove", is_flag=True, help="Stop and remove container (data preserved)")
+def setup_openclaw(status, remove):
+    """Deploy OpenClaw agent (loopback-only web UI; reach via SSH tunnel)."""
+    cfg = load_config()
+    remote_dir = cfg["docker"]["compose_dir"] + "/openclaw"
+    local_dir = PROJECT_ROOT / "docker" / "openclaw"
+
+    if status:
+        with get_connection() as conn:
+            conn.run(
+                "docker ps -a --filter name=openclaw "
+                "--format 'table {{.Names}}\\t{{.Status}}'",
+                pty=True,
+            )
+            conn.run(
+                "sudo ss -tlnp 2>/dev/null | grep ':18789' || echo '(port 18789 not bound)'",
+                pty=True,
+            )
+            conn.run("docker logs --tail 20 openclaw 2>&1 || true", pty=True)
+        return
+
+    if remove:
+        with get_connection() as conn:
+            conn.run(f"cd {remote_dir} && docker compose down", pty=True, warn=True)
+        console.print(
+            f"[yellow]OpenClaw stopped (data dir preserved at {remote_dir}/data)."
+        )
+        return
+
+    env_local = local_dir / ".env"
+    if not env_local.exists():
+        console.print("[red]Error: docker/openclaw/.env not found.")
+        console.print(
+            "[yellow]Copy .env.example -> .env and fill in: "
+            "OPENCLAW_GATEWAY_TOKEN, OPENAI_API_KEY, "
+            "TELEGRAM_BOT_TOKEN, FEISHU_APP_ID/SECRET."
+        )
+        raise SystemExit(1)
+
+    console.rule("[bold blue]OpenClaw deployment")
+    upload_dir(local_dir, remote_dir)
+
+    with get_connection() as conn:
+        conn.put(
+            str(PROJECT_ROOT / "scripts" / "setup-openclaw.sh"),
+            "/tmp/setup-openclaw.sh",
+        )
+        conn.run(
+            "chmod +x /tmp/setup-openclaw.sh && "
+            "sed -i 's/\\r$//' /tmp/setup-openclaw.sh"
+        )
+        conn.run(
+            f"sudo REMOTE_DIR={remote_dir} bash /tmp/setup-openclaw.sh",
+            pty=True,
+        )
+        conn.run("rm /tmp/setup-openclaw.sh", hide=True)
+
+    console.rule("[bold green]OpenClaw deployed!")
+    console.print()
+    console.print("[bold]Web UI:[/] loopback-only (127.0.0.1:18789).")
+    console.print(
+        "  Tunnel from a tailnet peer:  "
+        "[cyan]ssh -L 18789:127.0.0.1:18789 ubuntu@oracle-vm[/]"
+    )
+    console.print("  Then open [cyan]http://localhost:18789[/] locally.")
+    console.print()
+    console.print("[bold]Channels:")
+    console.print(
+        "  Telegram pairing:  "
+        "[cyan]docker exec -it openclaw openclaw pairing approve telegram <CODE>[/]"
+    )
+    console.print(
+        "  Feishu QR login:   "
+        "[cyan]docker exec -it openclaw openclaw channels login --channel feishu[/]"
+    )
+
+
 # --- Docker management commands ---
 
 @cli.group(name="docker")
