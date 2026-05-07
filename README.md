@@ -83,7 +83,7 @@ uv run oci-vm cloud metrics --hours 168    # Custom window (hours)
 | Keepalive | 180s CPU burst every 20 min + health checks + zombie / disk cleanup (anti-reclaim on Oracle Free Tier) | `docker/keepalive/` |
 | obsidian-sync | `rclone` bisync between Cloudflare R2 (rclone-crypt) and the shared `obsidian-sync_obsidian-vault` docker volume | `docker/obsidian-sync/` |
 | Tailscale | Mesh VPN joining an existing tailnet — native install (not Docker). Subnet router / exit node capability pre-wired, off by default. | `scripts/setup-tailscale.sh` |
-| OpenClaw | `ghcr.io/openclaw/openclaw:2026.5.4` agent gateway. Web UI loopback-only (127.0.0.1:18789); reach via `ssh -L 18789:127.0.0.1:18789 ubuntu@oracle-vm`. Telegram + Feishu channels via outbound (no inbound port). Persistent state at `data/{config,workspace}/`. | `docker/openclaw/` |
+| OpenClaw | `ghcr.io/openclaw/openclaw:2026.5.6` agent gateway. Web UI loopback-only (127.0.0.1:18789); reach via `ssh -L 18789:127.0.0.1:18789 ubuntu@oracle-vm`. Telegram + Feishu channels via outbound (no inbound port). Persistent state at `data/{config,workspace}/`. | `docker/openclaw/` |
 
 All containers run with `network_mode: host` — Oracle Cloud's iptables rules block Docker bridge outbound traffic.
 
