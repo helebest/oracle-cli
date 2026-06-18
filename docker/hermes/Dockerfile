@@ -1,6 +1,6 @@
 # Single source of truth for the upstream pin. Override at build time with
 # `--build-arg HERMES_VERSION=vX.Y.Z` (or via docker-compose build.args).
-ARG HERMES_VERSION=v2026.5.7
+ARG HERMES_VERSION=v2026.6.5
 FROM nousresearch/hermes-agent:${HERMES_VERSION}
 
 # ARG before FROM is only visible to FROM; re-declare so subsequent layers
@@ -22,6 +22,11 @@ LABEL org.opencontainers.image.title="hermes-agent (oracle-cli custom)" \
 #   v2026.5.7  → ends as root; gateway now REFUSES to start as root in the
 #                official image (PR #21250), so the tini + gosu drop to UID
 #                10000 is mandatory — DO NOT add a trailing `USER hermes` here.
+#   v2026.6.5  → ends as root; entrypoint switched from tini+gosu to s6-overlay
+#                (ENTRYPOINT ["/init", "/opt/hermes/docker/main-wrapper.sh"]),
+#                which s6-setuidgid-drops to UID 10000 at boot (skipping the
+#                drop only if already unprivileged). Still ends as root, so the
+#                rule holds — DO NOT add a trailing `USER hermes` here.
 # Pin to root for our build layers (apt + uv pip) and DO NOT switch back at the
 # end — the upstream entrypoint expects to start as root for usermod/gosu.
 USER root

@@ -275,7 +275,7 @@ def setup_hermes(start, status):
             console.print()
             console.print(f"  [cyan]docker run -it --rm \\")
             console.print(f"    -v {remote_dir}/data:/opt/data \\")
-            console.print(f"    hermes-agent:v2026.5.7 setup[/]")
+            console.print(f"    hermes-agent:v2026.6.5 setup[/]")
             console.print()
             console.print("Then start the gateway:")
             console.print("  [cyan]uv run oci-vm setup hermes --start[/]")

@@ -5,8 +5,8 @@ services:
       args:
         # Pin upstream Hermes Agent release. Keep in sync with the ARG default
         # in Dockerfile; either side wins because compose passes this through.
-        HERMES_VERSION: v2026.5.7
-    image: hermes-agent:v2026.5.7
+        HERMES_VERSION: v2026.6.5
+    image: hermes-agent:v2026.6.5
     container_name: hermes
     restart: unless-stopped
     network_mode: host
