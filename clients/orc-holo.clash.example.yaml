@@ -1,0 +1,70 @@
+# orc-holo — Clash Verge / mihomo 配置模板（脱敏，可入库）
+# 用法：复制为 orc-holo.clash.yaml 并填入真实值（真实文件已 gitignore）。
+# 取值来源：
+#   server      = VM 公网 IP        → uv run oci-vm cloud ip
+#   uuid        = 3x-ui VLESS 客户端 UUID
+#   public-key  = Reality public key
+#   short-id    = Reality short id（服务端列表里任选其一）
+#   详见 README「重新生成配置」
+mode: rule
+log-level: info
+ipv6: false
+
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - "*.lan"
+    - "+.local"
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  fallback:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+
+proxies:
+  - name: orc-holo
+    type: vless
+    server: <VM_PUBLIC_IP>
+    port: 8443
+    uuid: <CLIENT_UUID>
+    network: tcp
+    udp: true
+    tls: true
+    flow: xtls-rprx-vision
+    servername: www.microsoft.com
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: <REALITY_PUBLIC_KEY>
+      short-id: "<SHORT_ID>"
+
+proxy-groups:
+  - name: NORMAL
+    type: select
+    proxies:
+      - orc-holo
+      - DIRECT
+  - name: AI
+    type: select
+    proxies:
+      - orc-holo
+      - NORMAL
+
+rules:
+  # --- AI 服务：强制走代理，放最前避免被 GEOIP 误判直连 ---
+  - DOMAIN-SUFFIX,openai.com,AI
+  - DOMAIN-SUFFIX,chatgpt.com,AI
+  - DOMAIN-SUFFIX,oaistatic.com,AI
+  - DOMAIN-SUFFIX,oaiusercontent.com,AI
+  - DOMAIN-SUFFIX,anthropic.com,AI
+  - DOMAIN-SUFFIX,claude.ai,AI
+  - DOMAIN-SUFFIX,gemini.google.com,AI
+  - DOMAIN-SUFFIX,aistudio.google.com,AI
+  - DOMAIN-SUFFIX,generativelanguage.googleapis.com,AI
+  - DOMAIN-SUFFIX,deepmind.google,AI
+  - DOMAIN-KEYWORD,openai,AI
+  # --- 国内直连，其余全部走代理 ---
+  - GEOIP,CN,DIRECT
+  - MATCH,NORMAL

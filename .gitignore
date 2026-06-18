@@ -11,6 +11,9 @@ credentials/
 # Config with sensitive data (use config.example.yaml as template)
 config.yaml
 
+# Local proxy client configs with node credentials (use *.clash.example.yaml as template)
+clients/*.clash.yaml
+
 # Docker service secrets (compose .env files, rclone config)
 docker/*/.env
 docker/obsidian-sync/rclone.conf
