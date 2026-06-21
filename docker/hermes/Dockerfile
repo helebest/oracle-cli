@@ -1,6 +1,6 @@
 # Single source of truth for the upstream pin. Override at build time with
 # `--build-arg HERMES_VERSION=vX.Y.Z` (or via docker-compose build.args).
-ARG HERMES_VERSION=v2026.6.5
+ARG HERMES_VERSION=v2026.6.19
 FROM nousresearch/hermes-agent:${HERMES_VERSION}
 
 # ARG before FROM is only visible to FROM; re-declare so subsequent layers
@@ -27,6 +27,13 @@ LABEL org.opencontainers.image.title="hermes-agent (oracle-cli custom)" \
 #                which s6-setuidgid-drops to UID 10000 at boot (skipping the
 #                drop only if already unprivileged). Still ends as root, so the
 #                rule holds — DO NOT add a trailing `USER hermes` here.
+#   v2026.6.19 → same s6-overlay entrypoint (/init + main-wrapper.sh) and still
+#                ends as root, so the rule still holds. New upstream: /opt/hermes
+#                is now made immutable (chown root:root + chmod a-w) and the
+#                runtime sets HERMES_WRITE_SAFE_ROOT=/opt/data +
+#                HERMES_DISABLE_LAZY_INSTALLS=1. Our build layers only touch
+#                system paths (apt + `uv pip install --system`), never
+#                /opt/hermes, so the read-only install dir is fine.
 # Pin to root for our build layers (apt + uv pip) and DO NOT switch back at the
 # end — the upstream entrypoint expects to start as root for usermod/gosu.
 USER root
@@ -50,3 +57,21 @@ RUN apt-get update && \
 # Debian-based images ship in Python 3.13+ (introduced by upstream on v2026.4.16).
 RUN uv pip install --system --break-system-packages --no-cache \
         yt-dlp ruff mypy pygount nano-pdf jupyterlab
+
+# P3: Photon (iMessage) sidecar deps — bake spectrum-ts into the image.
+# The Photon platform plugin shells out to a Node sidecar whose deps normally
+# get npm-installed by `hermes photon install-sidecar` into
+# /opt/hermes/plugins/platforms/photon/sidecar. But v2026.6.19 makes /opt/hermes
+# immutable (chmod a-w) and the gateway runs as the non-root `hermes` user, so it
+# can't run that install itself at runtime. We install here as root at build time
+# instead — root bypasses the a-w bit, and node_modules then ships read-only in
+# the image. Node (v22, > the >=18.17 the sidecar requires) is already on PATH in
+# the base image. We call npm directly rather than `hermes photon install-sidecar`
+# because the /opt/hermes/bin/hermes shim would s6-setuidgid-drop to the hermes
+# user (which can't write the immutable dir). --unsafe-perm keeps npm's
+# postinstall (patch-spectrum-mixed-attachments.mjs) running as root so it can
+# write into the root-owned node_modules. After this, `hermes photon setup` only
+# needs the device-login + project steps (pass --skip-sidecar-install).
+RUN cd /opt/hermes/plugins/platforms/photon/sidecar && \
+    npm ci --no-audit --no-fund --unsafe-perm && \
+    chmod -R a+rX node_modules

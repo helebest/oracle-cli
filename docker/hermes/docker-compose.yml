@@ -5,8 +5,8 @@ services:
       args:
         # Pin upstream Hermes Agent release. Keep in sync with the ARG default
         # in Dockerfile; either side wins because compose passes this through.
-        HERMES_VERSION: v2026.6.5
-    image: hermes-agent:v2026.6.5
+        HERMES_VERSION: v2026.6.19
+    image: hermes-agent:v2026.6.19
     container_name: hermes
     restart: unless-stopped
     network_mode: host
@@ -20,7 +20,10 @@ services:
       resources:
         limits:
           memory: 8G
-          cpus: "3.0"
+          # Cap at the VM's OCPU count (VM.Standard.A1.Flex = 2 OCPUs). Docker
+          # rejects a cpus limit above the available core count at container
+          # (re)create time, so this must not exceed the instance's OCPUs.
+          cpus: "2.0"
 
 volumes:
   obsidian-vault:
