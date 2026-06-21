@@ -79,7 +79,7 @@ uv run oci-vm cloud metrics --hours 168    # Custom window (hours)
 |---|---|---|
 | Caddy | Reverse proxy + auto-HTTPS on :80 / :443 | `docker/caddy/` |
 | 3x-ui | Xray proxy panel (:2053 web, :8443 VLESS+Reality) | `docker/3x-ui/` |
-| Hermes | `nousresearch/hermes-agent` — `gateway run`; Obsidian vault at `/opt/data/vault/secondbrain` | `docker/hermes/` |
+| Hermes | `nousresearch/hermes-agent` — `gateway run`; Obsidian vault at `/opt/data/vault/secondbrain`; Photon iMessage sidecar baked into the image (activate with `docker exec -it hermes hermes photon setup --phone +1555... --skip-sidecar-install`) | `docker/hermes/` |
 | Keepalive | 180s CPU burst every 20 min + health checks + zombie / disk cleanup (anti-reclaim on Oracle Free Tier) | `docker/keepalive/` |
 | obsidian-sync | `rclone` bisync between Cloudflare R2 (rclone-crypt) and the shared `obsidian-sync_obsidian-vault` docker volume | `docker/obsidian-sync/` |
 | Tailscale | Mesh VPN joining an existing tailnet — native install (not Docker). Subnet router / exit node capability pre-wired, off by default. | `scripts/setup-tailscale.sh` |
